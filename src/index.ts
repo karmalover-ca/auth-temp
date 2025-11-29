@@ -2,7 +2,7 @@ import express from "express";
 import auth from "./auth/router";
 import { userMiddleware, User, AuthToken, ScopesRaw } from "./auth/auth_middleware";
 import bodyParser from "body-parser";
-import { addUser, usersCollection } from "./database";
+import { addUser, getUserByName } from "./database";
 import cors from "cors";
 import { createHmac } from "crypto";
 import { LOGGER, VERSION } from "./constants";
@@ -23,10 +23,8 @@ app.get("/", async (req, res) => {
 
 app.listen(port , async () => {
     LOGGER.info("server listening");
-    const collection = await usersCollection();
 
-    let karma: User = await collection.findOne({username: "karma"}) as any;
-    
+    let karma = await getUserByName("karma");   
     
     if (karma == null) {
         const hmac = createHmac("sha256", process.env.PASSWORD_SALT || "");
@@ -40,11 +38,9 @@ app.listen(port , async () => {
 
         await addUser(karma).catch(LOGGER.error);
         LOGGER.info("Created user karma with password ThisIsAPassword456")
+
     }
 
-    karma.scopes = ScopesRaw;
-
-    collection.replaceOne({username: "karma"}, karma);
 });
 
 export interface ERequest extends express.Request {

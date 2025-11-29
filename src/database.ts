@@ -1,135 +1,89 @@
-import { MongoClient } from "mongodb";
+import mysql from "mysql2/promise"
 import { AuthToken, User } from "./auth/auth_middleware";
+import { LOGGER } from "./constants";
 
-// const client = new MongoClient(`mongodb://${encodeURIComponent(process.env.MONGO_USER || "")}:${encodeURIComponent(process.env.MONGO_PASS || "")}@database:${process.env.MONGO_PORT || 27017}`);
-const client = new MongoClient(process.env.MONGODB_URI || "");
+const pool = mysql.createPool({
+    host: "klns.ca",
+    user: "hackslc",
+    password: "ThisIsAReallyStrongPasswordISwear123",
+    database: "hackslc"
+});
 
-let connected = false;
-
-export const getClient = async () => {
-    if(!connected) {
-        await client.connect();
-        connected = true;
-    }
-    return client;
+export async function query<T = any>(sql: string, values?: any[]): Promise<T[]> {
+    const [rows] = await pool.execute(sql, values);
+    return rows as T[];    
 }
 
-export const disconnect = async () => {
-    connected = false;
-    await client.close();
+export const getUserByName = async (username: string): Promise<User | null> => {
+    const user = await query("SELECT * FROM users WHERE username = ?;", [username])
+        .then(rows => rows[0]);
+
+    if(!user) return null;
+
+    return {
+        username: user.username,
+        name: user.name,
+        password_hash: user.userpass,
+        scopes: JSON.parse(user.scopes) || null
+    };
 }
 
-export const getDatabase = async () => {
-    return (await getClient()).db("webpage");
+export const getUserByToken = async (token: AuthToken): Promise<User | null> => {
+    const user = await getUserByName(token.user);
+
+    if(!user) return null;
+
+    return user;
 }
 
-export const authTokensCollection = async () => {
-    return (await getDatabase()).collection("auth_tokens");
+export const addUser = async (user: User): Promise<boolean> => {
+    await query("INSERT INTO users (username, name, userpass, scopes) VALUES (?, ?, ?, ?);", [
+        user.username,
+        user.name,
+        user.password_hash,
+        JSON.stringify(user.scopes) || null
+    ]).catch(LOGGER.error);
+
+    return true;
 }
 
-export const usersCollection = async () => {
-    return (await getDatabase()).collection("users");
-}
+export const deleteUser = async (user: User): Promise<boolean> => {
+    await query("DELETE FROM users WHERE username = ?;", [user.username]);
 
-export const todoCollection = async () => {
-    return (await getDatabase()).collection("todo")
+    return true;
 }
 
 export const addAccessToken = async (token: AuthToken): Promise<boolean> => {
-    const collection = await authTokensCollection();
+    await query("INSERT INTO accessTokens (token, createdAt, username) VALUES (?, ?, ?);", [
+        token.access_token,
+        token.created_at,
+        token.user
+    ]).catch(LOGGER.error);
 
-    if((await getAccessToken(token.access_token)) != null) return false;
-    collection.insertOne(token);
     return true;
 }
 
 export const getAccessToken = async (token: string): Promise<AuthToken | null> => {
-    const collection = await authTokensCollection();
+    const accessToken = await query("SELECT * FROM accessTokens WHERE token = ?;", [token])
+        .then(rows => rows[0]);
 
-    const element = await collection.findOne<AuthToken>({access_token: token});
-    if(!element) return null;
-    return element;
-}
+    if(!accessToken) return null;
 
-export const getUserByToken = async (token: AuthToken): Promise<User | null> => {
-    const collection = await usersCollection();
-
-    const element = await collection.findOne<User>({username: token.user});
-    if(!element) return null;
-    return element;
-}
-
-export const getUserByName = async (username: string): Promise<User | null> => {
-    const collection = await usersCollection();
-
-    const element = await collection.findOne<User>({username: username});
-    if(!element) return null;
-    return element;
-}
-
-export const addUser = async (user: User): Promise<boolean> => {
-    const collection = await usersCollection();
-
-    if((await getUserByName(user.username)) != null) return false;
-    const r = await collection.insertOne(user);
-    return r.acknowledged;
-}
-
-export const updateUser = async (user: User): Promise<boolean> => {
-    const collection = await usersCollection();
-
-    const r = await collection.replaceOne({username: user.username}, user);
-    return r.acknowledged && r.modifiedCount > 0;
+    return {
+        access_token: accessToken.token,
+        created_at: accessToken.created_at,
+        user: accessToken.Username
+    };
 }
 
 export const purgeAccessTokens = async (user: User): Promise<boolean> => {
-    const collection = await authTokensCollection();
+    await query("DELETE FROM accessTokens WHERE username = ?;", [user.username]);
 
-    const r = await collection.deleteMany({user: user.username});
-    return r.acknowledged && r.deletedCount > 0;
-}
-
-export const listAccessTokens = async (user: User): Promise<any[]> => {
-    const collection = await authTokensCollection();
-    let tokens: any[] = [];
-
-    const find = collection.find({user: user.username});
-
-    while(await find.hasNext()) {
-        const token = (await find.next()) as any;
-        delete token.access_token;
-        delete token._id;
-        tokens.push(token);
-    }
-    return tokens;
+    return true;
 }
 
 export const removeAccessToken = async (token: AuthToken): Promise<boolean> => {
-    const collection = await usersCollection();
+    await query("DELETE FROM accessTokens WHERE token = ?;", [token.access_token]);
 
-    const r = await collection.deleteOne(token);
-    return r.acknowledged && r.deletedCount > 0;
-}
-
-export const deleteUser = async (user: User): Promise<boolean> => {
-    const collection = await usersCollection();
-
-    const r = await collection.deleteOne(user);
-    return r.acknowledged && r.deletedCount > 0;
-}
-
-export const listUsers = async (): Promise<any[]> => {
-    const collection = await usersCollection();
-    let users: any[] = [];
-
-    const find = collection.find();
-
-    while(await find.hasNext()) {
-        const user = (await find.next()) as any;
-        delete user.password_hash;
-        delete user._id;
-        users.push(user);
-    }
-
-    return users;
+    return true;
 }
