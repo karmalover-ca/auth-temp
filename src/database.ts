@@ -1,5 +1,5 @@
 import mysql from "mysql2/promise"
-import { AuthToken, User } from "./auth/auth_middleware";
+import { AuthToken, Room, User } from "./auth/auth_middleware";
 import { LOGGER } from "./constants";
 
 const pool = mysql.createPool({
@@ -9,9 +9,9 @@ const pool = mysql.createPool({
     database: "hackslc"
 });
 
-export async function query<T = any>(sql: string, values?: any[]): Promise<T[]> {
+export async function query<T = any>(sql: string, values: any[]): Promise<T[]> {
     const [rows] = await pool.execute(sql, values);
-    return rows as T[];    
+    return rows as T[];
 }
 
 export const getUserByName = async (username: string): Promise<User | null> => {
@@ -37,11 +37,12 @@ export const getUserByToken = async (token: AuthToken): Promise<User | null> => 
 }
 
 export const addUser = async (user: User): Promise<boolean> => {
+    console.log("test")
     await query("INSERT INTO users (username, name, userpass, scopes) VALUES (?, ?, ?, ?);", [
         user.username,
-        user.name,
+        user.name || "",
         user.password_hash,
-        JSON.stringify(user.scopes) || null
+        JSON.stringify(user.scopes)
     ]).catch(LOGGER.error);
 
     return true;
@@ -54,6 +55,9 @@ export const deleteUser = async (user: User): Promise<boolean> => {
 }
 
 export const addAccessToken = async (token: AuthToken): Promise<boolean> => {
+
+    if((await getAccessToken(token.access_token)) != null) return false;
+
     await query("INSERT INTO accessTokens (token, createdAt, username) VALUES (?, ?, ?);", [
         token.access_token,
         token.created_at,
@@ -64,6 +68,7 @@ export const addAccessToken = async (token: AuthToken): Promise<boolean> => {
 }
 
 export const getAccessToken = async (token: string): Promise<AuthToken | null> => {
+    console.log("token " + token)
     const accessToken = await query("SELECT * FROM accessTokens WHERE token = ?;", [token])
         .then(rows => rows[0]);
 
@@ -72,7 +77,7 @@ export const getAccessToken = async (token: string): Promise<AuthToken | null> =
     return {
         access_token: accessToken.token,
         created_at: accessToken.created_at,
-        user: accessToken.Username
+        user: accessToken.username
     };
 }
 
@@ -86,4 +91,17 @@ export const removeAccessToken = async (token: AuthToken): Promise<boolean> => {
     await query("DELETE FROM accessTokens WHERE token = ?;", [token.access_token]);
 
     return true;
+}
+
+export const getRoom = async (roomNum: number): Promise<Room | null> => {
+    const room = await query("SELECT * FROM rooms WHERE roomNumber = ?;", [roomNum])
+        .then(rows => rows[0]);
+
+    return room;
+}
+
+export const getRooms = async (): Promise<Room[]> => {
+    const room = await query("SELECT * FROM rooms;", [null]);
+
+    return room
 }

@@ -15,3 +15,4 @@ export const DELETE_USER_FAILED = {"error": "delete_user_failed", "error_descrip
 export const PURGE_TOKENS_FAILED = {"error": "purge_tokens_failed", "error_description": "token purging failed"};
 export const LIST_USERS_FAILED = {"error": "list_users_failed", "error_description": "listing users failed"};
 export const MALFORMED_SIGNUP_REQUEST = {"error": "malformed_signup_request", "error_description": "missing username, password, name, or email parameters"};
+export const MALFORMED_REQUEST = {"error": "malformed_request", "error_description": "missing paramaters in the request"};

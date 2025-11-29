@@ -2,7 +2,7 @@ import express from "express";
 import auth from "./auth/router";
 import { userMiddleware, User, AuthToken, ScopesRaw } from "./auth/auth_middleware";
 import bodyParser from "body-parser";
-import { addUser, getUserByName } from "./database";
+import { addUser, getRoom, getUserByName } from "./database";
 import cors from "cors";
 import { createHmac } from "crypto";
 import { LOGGER, VERSION } from "./constants";
@@ -40,7 +40,6 @@ app.listen(port , async () => {
         LOGGER.info("Created user karma with password ThisIsAPassword456")
 
     }
-
 });
 
 export interface ERequest extends express.Request {

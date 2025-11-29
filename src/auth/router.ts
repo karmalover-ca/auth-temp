@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { createHmac, randomBytes } from "crypto";
 import * as Errors from "../errors";
-import { addAccessToken, addUser, deleteUser, getUserByName, purgeAccessTokens, removeAccessToken} from "../database";
+import { addAccessToken, addUser, deleteUser, getRoom, getRooms, getUserByName, purgeAccessTokens, removeAccessToken} from "../database";
 import { AuthToken, User} from "./auth_middleware";
 import { ERequest } from "..";
 import { LOGGER } from "../constants";
@@ -36,7 +36,7 @@ router.post("/create", async (req: ERequest, res) => {
     if(!body.username || !body.password || !body.scopes) return res.status(400).send(Errors.MALFORMED_LOGIN_REQUEST);
     if(!includesAll(req.user.scopes, body.scopes)) return res.status(403).send(Errors.MISSING_PERMISSIONS);
 
-    //if(await getUserByName(body.username) != null) return res.status(409).send(Errors.USER_EXISTS);
+    if(await getUserByName(body.username) != null) return res.status(409).send(Errors.USER_EXISTS);
 
     const hmac = createHmac("sha256", process.env.PASSWORD_SALT || "");
 
@@ -112,6 +112,30 @@ router.post("/identify", async(req: ERequest, res) => {
     u._id = undefined;
     
     res.status(200).send(u);
+})
+
+router.get("/getroom", async (req: ERequest, res) => {
+    if(!req.user) return res.status(401).send(Errors.MISSING_TOKEN);
+
+    const body = req.body;
+
+    if(!body.roomNum) return res.status(400).send(Errors.MALFORMED_REQUEST);
+
+    const room = await getRoom(body.roomNum);
+
+    if(!room) return res.status(404).send("Room Not Found Error");
+
+    return res.status(201).send(JSON.stringify(room));
+})
+
+router.get("/getrooms", async (req: ERequest, res) => {
+    if(!req.user) return res.status(401).send(Errors.MISSING_TOKEN);
+
+    const rooms = await getRooms();
+
+    if (!rooms) return res.status(404).send("Rooms Not Found Error");
+
+    return res.status(201).send(JSON.stringify(rooms));
 })
 
 async function generateToken(user: User): Promise<AuthToken> {
